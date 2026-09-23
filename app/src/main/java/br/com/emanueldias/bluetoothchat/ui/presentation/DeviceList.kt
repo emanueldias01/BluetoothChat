@@ -101,7 +101,7 @@ fun DeviceList(
                             deviceName = device.name,
                             deviceAddress = device.address,
                             isPair = device.isPair,
-                            isConnected = device.isConnected
+                            isConnected = device.isConnected,
                         )
                     }
                 }
