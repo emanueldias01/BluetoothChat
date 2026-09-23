@@ -4,5 +4,5 @@ import android.bluetooth.BluetoothDevice
 
 data class ScanResult(
     val isScanning: Boolean,
-    val devices: List<BluetoothDevice>
+    val devices: List<BluetoothDeviceComplete>
 )

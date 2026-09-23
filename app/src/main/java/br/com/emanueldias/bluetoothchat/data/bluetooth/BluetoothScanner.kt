@@ -12,7 +12,6 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
-import androidx.core.app.ActivityCompat.startActivityForResult
 import androidx.core.content.ContextCompat
 import androidx.core.content.IntentCompat
 import kotlinx.coroutines.channels.awaitClose
@@ -36,9 +35,11 @@ class BluetoothScanner(
     }
 
     @SuppressLint("MissingPermission")
-    fun getPairedDevices(): List<BluetoothDevice> {
+    fun getPairedDevices(): List<BluetoothDeviceComplete> {
         if (!hasRequiredPermissions()) return emptyList()
-        return bluetoothAdapter?.bondedDevices?.toList() ?: emptyList()
+        return bluetoothAdapter?.bondedDevices?.toList()
+            ?.map { BluetoothDeviceComplete(device = it, isConnected = isDeviceConnected(it)) }
+            ?: emptyList()
     }
 
     @SuppressLint("MissingPermission")
@@ -49,7 +50,7 @@ class BluetoothScanner(
             return@callbackFlow
         }
 
-        val discoveredDevices = mutableSetOf<BluetoothDevice>()
+        val discoveredDevices = mutableSetOf<BluetoothDeviceComplete>()
 
         trySend(ScanResult(isScanning = true, devices = emptyList()))
 
@@ -62,8 +63,9 @@ class BluetoothScanner(
                             BluetoothDevice.EXTRA_DEVICE,
                             BluetoothDevice::class.java,
                         )
-                        device?.let {
-                            discoveredDevices.add(it)
+                        device?.let { device ->
+                            val deviceComplete = BluetoothDeviceComplete(device = device, isConnected = isDeviceConnected(device))
+                            discoveredDevices.add(deviceComplete)
                             trySend(ScanResult(isScanning = true, devices = discoveredDevices.toList()))
                         }
                     }
@@ -126,6 +128,38 @@ class BluetoothScanner(
                 e.printStackTrace()
             }
         }
+    }
+
+    @SuppressLint("MissingPermission")
+    fun isDeviceConnected(device: BluetoothDevice): Boolean {
+        if (!hasRequiredPermissions()) return false
+
+        // 1. Reflection no metodo isConnected da classe BluetoothDevice (suporta Smartwatches, fones A2DP, etc.)
+        try {
+            val isConnectedMethod = device.javaClass.getMethod("isConnected")
+            val isConnected = isConnectedMethod.invoke(device) as? Boolean
+            if (isConnected == true) {
+                return true
+            }
+        } catch (_: Exception) {
+        }
+
+        // 2. Fallback via BluetoothManager (para perfis GATT)
+        if (bluetoothManager != null) {
+            val profiles = intArrayOf(
+                BluetoothProfile.GATT,
+                BluetoothProfile.GATT_SERVER
+            )
+            return profiles.any { profile ->
+                try {
+                    bluetoothManager.getConnectionState(device, profile) == BluetoothProfile.STATE_CONNECTED
+                } catch (_: Exception) {
+                    false
+                }
+            }
+        }
+
+        return false
     }
 
     companion object {

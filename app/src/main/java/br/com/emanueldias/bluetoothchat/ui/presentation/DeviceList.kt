@@ -100,7 +100,8 @@ fun DeviceList(
                         DeviceComponent(
                             deviceName = device.name,
                             deviceAddress = device.address,
-                            isPair = device.isPair
+                            isPair = device.isPair,
+                            isConnected = device.isConnected
                         )
                     }
                 }

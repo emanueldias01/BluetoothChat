@@ -1,5 +1,6 @@
 package br.com.emanueldias.bluetoothchat.ui.presentation.components
 
+import android.graphics.Color
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -29,7 +30,8 @@ fun DeviceComponent(
     modifier: Modifier = Modifier,
     deviceName: String,
     deviceAddress: String,
-    isPair: Boolean
+    isPair: Boolean,
+    isConnected: Boolean
 ) {
     Card(
         modifier.fillMaxWidth()
@@ -38,12 +40,24 @@ fun DeviceComponent(
         Column(
             modifier.padding(12.dp).fillMaxWidth()
         ) {
-            Text(deviceName, fontWeight = FontWeight.Bold, fontSize = 22.sp)
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(deviceName, fontWeight = FontWeight.Bold, fontSize = 22.sp)
+                if(isConnected) {
+                    Icon(
+                        imageVector = Icons.Default.Check,
+                        contentDescription = "Connected"
+                    )
+                }
+            }
             Spacer(modifier = Modifier.height(16.dp))
-            Row {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
                 Text(deviceAddress, fontSize = 12.sp)
                 if(isPair) {
-                    Icon(Icons.Default.Check, contentDescription = null)
+                    Text("Pair", fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 }
             }
 
@@ -58,7 +72,8 @@ private fun DeviceComponentPreview() {
         DeviceComponent(
             deviceName = "Android de Emanuel",
             deviceAddress = "123123123123",
-            isPair = true
+            isPair = true,
+            isConnected = true
         )
     }
 }

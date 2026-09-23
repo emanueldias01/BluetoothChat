@@ -34,11 +34,11 @@ class DeviceViewModel(
         }
         val paired = bluetoothScanner.getPairedDevices().map { d ->
             val name = try {
-                d.name ?: "No name device"
+                d.device.name ?: "Unnamed device"
             } catch (e: SecurityException) {
-                "Dispositivo sem nome"
+                "Unnamed device"
             }
-            Device(name = name, address = d.address, isPair = true)
+            Device(name = name, address = d.device.address, isPair = true, isConnected = d.isConnected)
         }
         _uiState.value = _uiState.value.copy(pairedDevices = paired)
     }
@@ -57,11 +57,11 @@ class DeviceViewModel(
             bluetoothScanner.startScan().collect { scanResult ->
                 val scanned = scanResult.devices.map { d ->
                     val name = try {
-                        d.name ?: "No name device"
+                        d.device.name ?: "Unnamed device"
                     } catch (e: SecurityException) {
-                        "Dispositivo sem nome"
+                        "Unnamed device"
                     }
-                    Device(name = name, address = d.address, d.bondState == 1)
+                    Device(name = name, address = d.device.address, d.device.bondState == 1, isConnected = d.isConnected)
                 }
                 _uiState.value = _uiState.value.copy(
                     scannedDevices = scanned,
