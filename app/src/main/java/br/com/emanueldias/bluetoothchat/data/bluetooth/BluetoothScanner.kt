@@ -63,10 +63,14 @@ class BluetoothScanner(
                             BluetoothDevice.EXTRA_DEVICE,
                             BluetoothDevice::class.java,
                         )
-                        device?.let { device ->
-                            val deviceComplete = BluetoothDeviceComplete(device = device, isConnected = isDeviceConnected(device))
-                            discoveredDevices.add(deviceComplete)
-                            trySend(ScanResult(isScanning = true, devices = discoveredDevices.toList()))
+                        if(device != null) {
+                            if(device.type == BluetoothDevice.DEVICE_TYPE_CLASSIC) {
+                                device.let { device ->
+                                    val deviceComplete = BluetoothDeviceComplete(device = device, isConnected = isDeviceConnected(device))
+                                    discoveredDevices.add(deviceComplete)
+                                    trySend(ScanResult(isScanning = true, devices = discoveredDevices.toList()))
+                                }
+                            }
                         }
                     }
                     BluetoothAdapter.ACTION_DISCOVERY_FINISHED -> {
