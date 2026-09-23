@@ -5,7 +5,6 @@ import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
-import android.bluetooth.BluetoothProfile
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -35,11 +34,9 @@ class BluetoothScanner(
     }
 
     @SuppressLint("MissingPermission")
-    fun getPairedDevices(): List<BluetoothDeviceComplete> {
+    fun getPairedDevices(): List<BluetoothDevice> {
         if (!hasRequiredPermissions()) return emptyList()
-        return bluetoothAdapter?.bondedDevices?.toList()
-            ?.map { BluetoothDeviceComplete(device = it, isConnected = isDeviceConnected(it)) }
-            ?: emptyList()
+        return bluetoothAdapter?.bondedDevices?.toList() ?: emptyList()
     }
 
     @SuppressLint("MissingPermission")
@@ -50,7 +47,7 @@ class BluetoothScanner(
             return@callbackFlow
         }
 
-        val discoveredDevices = mutableSetOf<BluetoothDeviceComplete>()
+        val discoveredDevices = mutableSetOf<BluetoothDevice>()
 
         trySend(ScanResult(isScanning = true, devices = emptyList()))
 
@@ -63,13 +60,10 @@ class BluetoothScanner(
                             BluetoothDevice.EXTRA_DEVICE,
                             BluetoothDevice::class.java,
                         )
-                        if(device != null) {
-                            if(device.type == BluetoothDevice.DEVICE_TYPE_CLASSIC) {
-                                device.let { device ->
-                                    val deviceComplete = BluetoothDeviceComplete(device = device, isConnected = isDeviceConnected(device))
-                                    discoveredDevices.add(deviceComplete)
-                                    trySend(ScanResult(isScanning = true, devices = discoveredDevices.toList()))
-                                }
+                        if (device != null) {
+                            if (device.type == BluetoothDevice.DEVICE_TYPE_CLASSIC) {
+                                discoveredDevices.add(device)
+                                trySend(ScanResult(isScanning = true, devices = discoveredDevices.toList()))
                             }
                         }
                     }
@@ -134,38 +128,6 @@ class BluetoothScanner(
         }
     }
 
-    @SuppressLint("MissingPermission")
-    fun isDeviceConnected(device: BluetoothDevice): Boolean {
-        if (!hasRequiredPermissions()) return false
-
-        // 1. Reflection no metodo isConnected da classe BluetoothDevice (suporta Smartwatches, fones A2DP, etc.)
-        try {
-            val isConnectedMethod = device.javaClass.getMethod("isConnected")
-            val isConnected = isConnectedMethod.invoke(device) as? Boolean
-            if (isConnected == true) {
-                return true
-            }
-        } catch (_: Exception) {
-        }
-
-        // 2. Fallback via BluetoothManager (para perfis GATT)
-        if (bluetoothManager != null) {
-            val profiles = intArrayOf(
-                BluetoothProfile.GATT,
-                BluetoothProfile.GATT_SERVER
-            )
-            return profiles.any { profile ->
-                try {
-                    bluetoothManager.getConnectionState(device, profile) == BluetoothProfile.STATE_CONNECTED
-                } catch (_: Exception) {
-                    false
-                }
-            }
-        }
-
-        return false
-    }
-
     companion object {
         fun getRequiredPermissions(): Array<String> {
             return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -187,5 +149,15 @@ class BluetoothScanner(
                 ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
             }
         }
+    }
+}
+
+@SuppressLint("MissingPermission")
+fun BluetoothDevice.isConnected(): Boolean {
+    return try {
+        val method = javaClass.getMethod("isConnected")
+        method.invoke(this) as? Boolean == true
+    } catch (_: Exception) {
+        false
     }
 }

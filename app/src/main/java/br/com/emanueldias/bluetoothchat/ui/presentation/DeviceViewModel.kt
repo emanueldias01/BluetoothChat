@@ -1,13 +1,14 @@
 package br.com.emanueldias.bluetoothchat.ui.presentation
 
 import android.annotation.SuppressLint
-import android.bluetooth.BondStatus
+import android.bluetooth.BluetoothDevice
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import br.com.emanueldias.bluetoothchat.data.bluetooth.BluetoothScanner
+import br.com.emanueldias.bluetoothchat.data.bluetooth.isConnected
 import br.com.emanueldias.bluetoothchat.domain.Device
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,13 +33,18 @@ class DeviceViewModel(
         if (!bluetoothScanner.hasRequiredPermissions() || !bluetoothScanner.isBluetoothEnable()) {
             return
         }
-        val paired = bluetoothScanner.getPairedDevices().map { d ->
+        val paired = bluetoothScanner.getPairedDevices().map { device ->
             val name = try {
-                d.device.name ?: "Unnamed device"
-            } catch (e: SecurityException) {
+                device.name ?: "Unnamed device"
+            } catch (_: SecurityException) {
                 "Unnamed device"
             }
-            Device(name = name, address = d.device.address, isPair = true, isConnected = d.isConnected)
+            Device(
+                name = name,
+                address = device.address,
+                isPair = true,
+                isConnected = device.isConnected()
+            )
         }
         _uiState.value = _uiState.value.copy(pairedDevices = paired)
     }
@@ -55,13 +61,18 @@ class DeviceViewModel(
         scanJob?.cancel()
         scanJob = viewModelScope.launch {
             bluetoothScanner.startScan().collect { scanResult ->
-                val scanned = scanResult.devices.map { d ->
+                val scanned = scanResult.devices.map { device ->
                     val name = try {
-                        d.device.name ?: "Unnamed device"
-                    } catch (e: SecurityException) {
+                        device.name ?: "Unnamed device"
+                    } catch (_: SecurityException) {
                         "Unnamed device"
                     }
-                    Device(name = name, address = d.device.address, d.device.bondState == 1, isConnected = d.isConnected)
+                    Device(
+                        name = name,
+                        address = device.address,
+                        isPair = device.bondState == BluetoothDevice.BOND_BONDED,
+                        isConnected = device.isConnected()
+                    )
                 }
                 _uiState.value = _uiState.value.copy(
                     scannedDevices = scanned,
