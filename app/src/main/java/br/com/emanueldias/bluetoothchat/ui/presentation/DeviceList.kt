@@ -3,9 +3,11 @@ package br.com.emanueldias.bluetoothchat.ui.presentation
 import android.app.Activity
 import android.bluetooth.BluetoothAdapter
 import android.content.Intent
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -13,6 +15,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Snackbar
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -75,6 +78,13 @@ fun DeviceList(
         }
     }
 
+    LaunchedEffect(uiState.connectionError) {
+        uiState.connectionError?.let { error ->
+            Toast.makeText(context, error, Toast.LENGTH_SHORT).show()
+            viewModel.clearConnectionError()
+        }
+    }
+
     Scaffold(
         topBar = {
             AppBarListDevices(onScanClick = { viewModel.scanDevices() })
@@ -83,29 +93,45 @@ fun DeviceList(
         Box(
             modifier = modifier
                 .fillMaxSize()
-                .padding(innerPadding)
+                .padding(innerPadding),
         ) {
-            if (uiState.isLoading && devices.isEmpty()) {
-                CircularProgressIndicator(
-                    modifier = Modifier.align(Alignment.Center)
-                )
-            } else if (devices.isEmpty()) {
+            if (devices.isEmpty()) {
                 Text(
                     text = "No devices found",
-                    modifier = Modifier.align(Alignment.Center)
                 )
             } else {
-                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
                     items(devices) { device ->
                         DeviceComponent(
                             deviceName = device.name,
                             deviceAddress = device.address,
                             isPair = device.isPair,
-                            isConnected = device.isConnected
+                            isConnected = device.isConnected,
+                            onClickPairOrConnectDevice = {
+                                if (device.isPair) {
+                                    viewModel.connectDevice(deviceAddress = device.address)
+                                } else {
+                                    viewModel.pairDevice(deviceAddress = device.address)
+                                }
+                            },
+                            isLoading = uiState.isConnecting
                         )
+
+
+                    }
+
+                    if (uiState.isScanning) {
+                        item {
+                            CircularProgressIndicator()
+                        }
                     }
                 }
             }
+
+
         }
     }
 }

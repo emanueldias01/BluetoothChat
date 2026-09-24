@@ -5,6 +5,7 @@ import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
+import android.bluetooth.BluetoothSocket
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -13,9 +14,19 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.ContextCompat
 import androidx.core.content.IntentCompat
+import java.util.UUID
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.withContext
+
+sealed interface ConnectionState {
+    object Idle : ConnectionState
+    object Connecting : ConnectionState
+    data class Connected(val socket: BluetoothSocket) : ConnectionState
+    data class Error(val message: String) : ConnectionState
+}
 
 class BluetoothScanner(
     private val context: Context
@@ -125,6 +136,121 @@ class BluetoothScanner(
             } catch (e: SecurityException) {
                 e.printStackTrace()
             }
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    fun pairDevice(deviceAddress: String): Boolean {
+        if (!hasRequiredPermissions() || !isBluetoothEnable()) return false
+        val device = bluetoothAdapter?.getRemoteDevice(deviceAddress) ?: return false
+        return device.createBond()
+    }
+
+    @SuppressLint("MissingPermission")
+    fun pairDevice(device: BluetoothDevice): Boolean {
+        if (!hasRequiredPermissions() || !isBluetoothEnable()) return false
+        return device.createBond()
+    }
+
+    @SuppressLint("MissingPermission")
+    fun pairDeviceFlow(deviceAddress: String): Flow<Int> = callbackFlow {
+        if (!hasRequiredPermissions() || !isBluetoothEnable()) {
+            close()
+            return@callbackFlow
+        }
+
+        val device = bluetoothAdapter?.getRemoteDevice(deviceAddress)
+        if (device == null) {
+            close()
+            return@callbackFlow
+        }
+
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                if (intent.action == BluetoothDevice.ACTION_BOND_STATE_CHANGED) {
+                    val targetDevice = IntentCompat.getParcelableExtra(
+                        intent,
+                        BluetoothDevice.EXTRA_DEVICE,
+                        BluetoothDevice::class.java,
+                    )
+                    if (targetDevice?.address == device.address) {
+                        val bondState = intent.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE, BluetoothDevice.ERROR)
+                        trySend(bondState)
+                        if (bondState == BluetoothDevice.BOND_BONDED || bondState == BluetoothDevice.BOND_NONE) {
+                            close()
+                        }
+                    }
+                }
+            }
+        }
+
+        val filter = IntentFilter(BluetoothDevice.ACTION_BOND_STATE_CHANGED)
+        ContextCompat.registerReceiver(
+            context,
+            receiver,
+            filter,
+            ContextCompat.RECEIVER_EXPORTED,
+        )
+
+        val initiated = device.createBond()
+        if (!initiated) {
+            trySend(BluetoothDevice.ERROR)
+            close()
+        }
+
+        awaitClose {
+            try {
+                context.unregisterReceiver(receiver)
+            } catch (e: IllegalArgumentException) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    fun connectToDevice(deviceAddress: String): Flow<ConnectionState> = callbackFlow {
+        if (!hasRequiredPermissions() || !isBluetoothEnable()) {
+            trySend(ConnectionState.Error("Bluetooth disabled or missing permissions"))
+            close()
+            return@callbackFlow
+        }
+
+        val device = bluetoothAdapter?.getRemoteDevice(deviceAddress)
+        if (device == null) {
+            trySend(ConnectionState.Error("Device not found"))
+            close()
+            return@callbackFlow
+        }
+
+        trySend(ConnectionState.Connecting)
+
+        if (bluetoothAdapter.isDiscovering) {
+            bluetoothAdapter.cancelDiscovery()
+        }
+
+        val socket = try {
+            device.createRfcommSocketToServiceRecord(UUID.fromString("00001101-0000-1000-8000-00805F9B34FB"))
+        } catch (e: Exception) {
+            trySend(ConnectionState.Error(e.message ?: "Failed to create socket"))
+            close()
+            return@callbackFlow
+        }
+
+        try {
+            withContext(Dispatchers.IO) {
+                socket.connect()
+            }
+            trySend(ConnectionState.Connected(socket))
+        } catch (e: Exception) {
+            try {
+                socket.close()
+            } catch (_: Exception) {}
+            trySend(ConnectionState.Error(e.message ?: "Failed to connect"))
+            close()
+        }
+
+        awaitClose {
+            // Keep socket open unless explicitly disconnected or flow cancelled
         }
     }
 
