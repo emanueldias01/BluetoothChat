@@ -26,13 +26,18 @@ fun ModalConnectDevice(
     deviceName: String,
     deviceAddress: String,
     onClickCancel: () -> Unit,
-    onClickConnect: () -> Unit
+    onClickConnect: () -> Unit,
+    isPair: Boolean
 ) {
     Card() {
         Column(
             modifier = modifier.padding(36.dp)
         ) {
-            Text("Do you want to connect to the device?", fontSize = 24.sp)
+            if(isPair) {
+                Text("Do you want to connect to the device?", fontSize = 24.sp)
+            }else {
+                Text("Do you want pair to the device?", fontSize = 24.sp)
+            }
             Spacer(modifier = Modifier.height(10.dp))
             Row {
                 Text("Name: ")
@@ -67,6 +72,6 @@ fun ModalConnectDevice(
 @Composable
 private fun ModalConnectDevicePreview() {
     BluetoothChatTheme() {
-        ModalConnectDevice(deviceName = "Android de Emanuel", deviceAddress = "12312323", onClickConnect = {}, onClickCancel = {})
+        ModalConnectDevice(deviceName = "Android de Emanuel", deviceAddress = "12312323", onClickConnect = {}, onClickCancel = {}, isPair = false)
     }
 }

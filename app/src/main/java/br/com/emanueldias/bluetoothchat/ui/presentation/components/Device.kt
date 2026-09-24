@@ -70,9 +70,11 @@ fun DeviceComponent(
         }
 
         if(isExpanded) {
-            Dialog(onDismissRequest = {isExpanded = false}) {
-                ModalConnectDevice(deviceName = deviceName, deviceAddress = deviceAddress,onClickCancel = {isExpanded = false}, onClickConnect = {})
-            }
+           if(!isConnected) {
+               Dialog(onDismissRequest = {isExpanded = false}) {
+                   ModalConnectDevice(deviceName = deviceName, deviceAddress = deviceAddress,onClickCancel = {isExpanded = false}, onClickConnect = {}, isPair = isPair)
+               }
+           }
         }
     }
 }

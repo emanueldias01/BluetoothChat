@@ -128,6 +128,74 @@ class BluetoothScanner(
         }
     }
 
+    @SuppressLint("MissingPermission")
+    fun pairDevice(deviceAddress: String): Boolean {
+        if (!hasRequiredPermissions() || !isBluetoothEnable()) return false
+        val device = bluetoothAdapter?.getRemoteDevice(deviceAddress) ?: return false
+        return device.createBond()
+    }
+
+    @SuppressLint("MissingPermission")
+    fun pairDevice(device: BluetoothDevice): Boolean {
+        if (!hasRequiredPermissions() || !isBluetoothEnable()) return false
+        return device.createBond()
+    }
+
+    @SuppressLint("MissingPermission")
+    fun pairDeviceFlow(deviceAddress: String): Flow<Int> = callbackFlow {
+        if (!hasRequiredPermissions() || !isBluetoothEnable()) {
+            close()
+            return@callbackFlow
+        }
+
+        val device = bluetoothAdapter?.getRemoteDevice(deviceAddress)
+        if (device == null) {
+            close()
+            return@callbackFlow
+        }
+
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                if (intent.action == BluetoothDevice.ACTION_BOND_STATE_CHANGED) {
+                    val targetDevice = IntentCompat.getParcelableExtra(
+                        intent,
+                        BluetoothDevice.EXTRA_DEVICE,
+                        BluetoothDevice::class.java,
+                    )
+                    if (targetDevice?.address == device.address) {
+                        val bondState = intent.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE, BluetoothDevice.ERROR)
+                        trySend(bondState)
+                        if (bondState == BluetoothDevice.BOND_BONDED || bondState == BluetoothDevice.BOND_NONE) {
+                            close()
+                        }
+                    }
+                }
+            }
+        }
+
+        val filter = IntentFilter(BluetoothDevice.ACTION_BOND_STATE_CHANGED)
+        ContextCompat.registerReceiver(
+            context,
+            receiver,
+            filter,
+            ContextCompat.RECEIVER_EXPORTED,
+        )
+
+        val initiated = device.createBond()
+        if (!initiated) {
+            trySend(BluetoothDevice.ERROR)
+            close()
+        }
+
+        awaitClose {
+            try {
+                context.unregisterReceiver(receiver)
+            } catch (e: IllegalArgumentException) {
+                e.printStackTrace()
+            }
+        }
+    }
+
     companion object {
         fun getRequiredPermissions(): Array<String> {
             return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
