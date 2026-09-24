@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -34,6 +33,8 @@ fun DeviceComponent(
     deviceAddress: String,
     isPair: Boolean,
     isConnected: Boolean,
+    onClickPairOrConnectDevice: () -> Unit,
+    isLoading: Boolean
 ) {
 
     var isExpanded by rememberSaveable { mutableStateOf(false) }
@@ -72,7 +73,14 @@ fun DeviceComponent(
         if(isExpanded) {
            if(!isConnected) {
                Dialog(onDismissRequest = {isExpanded = false}) {
-                   ModalConnectDevice(deviceName = deviceName, deviceAddress = deviceAddress,onClickCancel = {isExpanded = false}, onClickConnect = {}, isPair = isPair)
+                   ModalConnectDevice(
+                       deviceName = deviceName,
+                       deviceAddress = deviceAddress,
+                       onClickCancel = {isExpanded = false},
+                       isPair = isPair,
+                       onClickPairOrConnectDevice = onClickPairOrConnectDevice,
+                       isLoading = isLoading
+                   )
                }
            }
         }
@@ -88,6 +96,8 @@ private fun DeviceComponentPreview() {
             deviceAddress = "123123123123",
             isPair = true,
             isConnected = true,
+            onClickPairOrConnectDevice = {},
+            isLoading = false
         )
     }
 }

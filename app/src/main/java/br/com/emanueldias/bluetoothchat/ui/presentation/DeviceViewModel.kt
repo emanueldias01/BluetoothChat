@@ -2,12 +2,14 @@ package br.com.emanueldias.bluetoothchat.ui.presentation
 
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothDevice
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import br.com.emanueldias.bluetoothchat.data.bluetooth.BluetoothScanner
+import br.com.emanueldias.bluetoothchat.data.bluetooth.ConnectionState
 import br.com.emanueldias.bluetoothchat.data.bluetooth.isConnected
 import br.com.emanueldias.bluetoothchat.domain.Device
 import kotlinx.coroutines.Job
@@ -23,6 +25,7 @@ class DeviceViewModel(
     val uiState: StateFlow<DeviceListUiState> = _uiState.asStateFlow()
 
     private var scanJob: Job? = null
+    private var connectionJob: Job? = null
 
     init {
         loadPairedDevices()
@@ -86,6 +89,64 @@ class DeviceViewModel(
         bluetoothScanner.stopScan()
         scanJob?.cancel()
         _uiState.value = _uiState.value.copy(isScanning = false)
+    }
+
+    fun pairDevice(deviceAddress: String) {
+        Log.i("DEVICEVIEWMODEL", "pairDevice: $deviceAddress")
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isConnecting = true, connectionError = null)
+            bluetoothScanner.pairDeviceFlow(deviceAddress).collect { bondState ->
+                when (bondState) {
+                    BluetoothDevice.BOND_BONDED -> {
+                        _uiState.value = _uiState.value.copy(isConnecting = false)
+                        loadPairedDevices()
+                    }
+                    BluetoothDevice.BOND_NONE -> {
+                        _uiState.value = _uiState.value.copy(
+                            connectionError = "Failed to pair with device",
+                            isConnecting = false
+                        )
+                    }
+                    BluetoothDevice.BOND_BONDING -> {
+                        _uiState.value = _uiState.value.copy(isConnecting = true)
+                    }
+                }
+            }
+        }
+    }
+
+    fun connectDevice(deviceAddress: String) {
+        Log.i("DEVICEVIEWMODEL", "connectDevice: $deviceAddress")
+        _uiState.value = _uiState.value.copy(isConnecting = true, connectionError = null)
+        connectionJob?.cancel()
+        connectionJob = viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isConnecting = true, connectionError = null)
+            bluetoothScanner.connectToDevice(deviceAddress).collect { state ->
+                when (state) {
+                    is ConnectionState.Connected -> {
+                        _uiState.value = _uiState.value.copy(
+                            isConnecting = false,
+                            connectedSocket = state.socket
+                        )
+                        loadPairedDevices()
+                    }
+                    is ConnectionState.Error -> {
+                        _uiState.value = _uiState.value.copy(
+                            isConnecting = false,
+                            connectionError = state.message
+                        )
+                    }
+                    ConnectionState.Connecting -> {
+                        _uiState.value = _uiState.value.copy(isConnecting = true)
+                    }
+                    ConnectionState.Idle -> {}
+                }
+            }
+        }
+    }
+
+    fun clearConnectionError() {
+        _uiState.value = _uiState.value.copy(connectionError = null)
     }
 
     companion object {

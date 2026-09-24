@@ -7,9 +7,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -26,13 +26,16 @@ fun ModalConnectDevice(
     deviceName: String,
     deviceAddress: String,
     onClickCancel: () -> Unit,
-    onClickConnect: () -> Unit,
-    isPair: Boolean
+    isPair: Boolean,
+    isLoading: Boolean,
+    onClickPairOrConnectDevice: () -> Unit
 ) {
     Card() {
         Column(
             modifier = modifier.padding(36.dp)
         ) {
+
+
             if(isPair) {
                 Text("Do you want to connect to the device?", fontSize = 24.sp)
             }else {
@@ -53,15 +56,29 @@ fun ModalConnectDevice(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Button(
-                    onClick = onClickConnect
+                    onClick = onClickPairOrConnectDevice,
+                    enabled = !isLoading
                 ) {
-                    Text("Connect")
+                   if(isPair) {
+                       Text("Connect")
+                   } else {
+                       Text("Pair")
+                   }
                 }
 
                 OutlinedButton(
                     onClick = onClickCancel
                 ) {
                     Text("Cancel")
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center
+            ) {
+                if(isLoading) {
+                    CircularProgressIndicator()
                 }
             }
         }
@@ -72,6 +89,13 @@ fun ModalConnectDevice(
 @Composable
 private fun ModalConnectDevicePreview() {
     BluetoothChatTheme() {
-        ModalConnectDevice(deviceName = "Android de Emanuel", deviceAddress = "12312323", onClickConnect = {}, onClickCancel = {}, isPair = false)
+        ModalConnectDevice(
+            deviceName = "Android de Emanuel",
+            deviceAddress = "12312323",
+            onClickCancel = {},
+            onClickPairOrConnectDevice = {},
+            isPair = false,
+            isLoading = true
+        )
     }
 }

@@ -5,6 +5,7 @@ import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
+import android.bluetooth.BluetoothSocket
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -13,9 +14,19 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.ContextCompat
 import androidx.core.content.IntentCompat
+import java.util.UUID
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.withContext
+
+sealed interface ConnectionState {
+    object Idle : ConnectionState
+    object Connecting : ConnectionState
+    data class Connected(val socket: BluetoothSocket) : ConnectionState
+    data class Error(val message: String) : ConnectionState
+}
 
 class BluetoothScanner(
     private val context: Context
@@ -193,6 +204,53 @@ class BluetoothScanner(
             } catch (e: IllegalArgumentException) {
                 e.printStackTrace()
             }
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    fun connectToDevice(deviceAddress: String): Flow<ConnectionState> = callbackFlow {
+        if (!hasRequiredPermissions() || !isBluetoothEnable()) {
+            trySend(ConnectionState.Error("Bluetooth disabled or missing permissions"))
+            close()
+            return@callbackFlow
+        }
+
+        val device = bluetoothAdapter?.getRemoteDevice(deviceAddress)
+        if (device == null) {
+            trySend(ConnectionState.Error("Device not found"))
+            close()
+            return@callbackFlow
+        }
+
+        trySend(ConnectionState.Connecting)
+
+        if (bluetoothAdapter.isDiscovering) {
+            bluetoothAdapter.cancelDiscovery()
+        }
+
+        val socket = try {
+            device.createRfcommSocketToServiceRecord(UUID.fromString("00001101-0000-1000-8000-00805F9B34FB"))
+        } catch (e: Exception) {
+            trySend(ConnectionState.Error(e.message ?: "Failed to create socket"))
+            close()
+            return@callbackFlow
+        }
+
+        try {
+            withContext(Dispatchers.IO) {
+                socket.connect()
+            }
+            trySend(ConnectionState.Connected(socket))
+        } catch (e: Exception) {
+            try {
+                socket.close()
+            } catch (_: Exception) {}
+            trySend(ConnectionState.Error(e.message ?: "Failed to connect"))
+            close()
+        }
+
+        awaitClose {
+            // Keep socket open unless explicitly disconnected or flow cancelled
         }
     }
 
