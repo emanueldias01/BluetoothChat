@@ -12,12 +12,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -34,55 +36,77 @@ fun DeviceComponent(
     isPair: Boolean,
     isConnected: Boolean,
     onClickPairOrConnectDevice: () -> Unit,
+    onOpenChat: () -> Unit = {},
     isLoading: Boolean
 ) {
-
     var isExpanded by rememberSaveable { mutableStateOf(false) }
 
     Card(
-        modifier.fillMaxWidth()
+        modifier = modifier
+            .fillMaxWidth()
             .padding(12.dp)
-            .clickable(onClick = {isExpanded = true})
-    ) {
-        Column(
-            modifier.padding(12.dp).fillMaxWidth()
-        ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Text(deviceName, fontWeight = FontWeight.Bold, fontSize = 22.sp)
-                if(isConnected) {
-                    Icon(
-                        imageVector = Icons.Default.Check,
-                        contentDescription = "Connected"
-                    )
+            .clickable {
+                if (isConnected) {
+                    onOpenChat()
+                } else {
+                    isExpanded = true
                 }
             }
-            Spacer(modifier = Modifier.height(16.dp))
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(12.dp)
+                .fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(deviceName, fontWeight = FontWeight.Bold, fontSize = 22.sp)
+                if (isConnected) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Connected",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = "Connected",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
             Row(
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(deviceAddress, fontSize = 12.sp)
-                if(isPair) {
-                    Text("Pair", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                if (isPair) {
+                    Text("Paired", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
             }
-
         }
 
-        if(isExpanded) {
-           if(!isConnected) {
-               Dialog(onDismissRequest = {isExpanded = false}) {
-                   ModalConnectDevice(
-                       deviceName = deviceName,
-                       deviceAddress = deviceAddress,
-                       onClickCancel = {isExpanded = false},
-                       isPair = isPair,
-                       onClickPairOrConnectDevice = onClickPairOrConnectDevice,
-                       isLoading = isLoading
-                   )
-               }
-           }
+        if (isExpanded) {
+            if (!isConnected) {
+                Dialog(onDismissRequest = { isExpanded = false }) {
+                    ModalConnectDevice(
+                        deviceName = deviceName,
+                        deviceAddress = deviceAddress,
+                        onClickCancel = { isExpanded = false },
+                        isPair = isPair,
+                        onClickPairOrConnectDevice = onClickPairOrConnectDevice,
+                        isLoading = isLoading
+                    )
+                }
+            }
         }
     }
 }
@@ -90,13 +114,14 @@ fun DeviceComponent(
 @Preview
 @Composable
 private fun DeviceComponentPreview() {
-    BluetoothChatTheme() {
+    BluetoothChatTheme {
         DeviceComponent(
             deviceName = "Android de Emanuel",
             deviceAddress = "123123123123",
             isPair = true,
             isConnected = true,
             onClickPairOrConnectDevice = {},
+            onOpenChat = {},
             isLoading = false
         )
     }

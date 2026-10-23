@@ -7,15 +7,15 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Snackbar
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -35,9 +35,7 @@ import br.com.emanueldias.bluetoothchat.ui.presentation.components.DeviceCompone
 fun DeviceList(
     modifier: Modifier = Modifier,
     viewModel: DeviceViewModel = viewModel(
-        factory = DeviceViewModel.Factory(
-            BluetoothScanner(LocalContext.current.applicationContext)
-        )
+        factory = DeviceViewModel.Factory(LocalContext.current)
     )
 ) {
     val context = LocalContext.current
@@ -85,53 +83,69 @@ fun DeviceList(
         }
     }
 
-    Scaffold(
-        topBar = {
-            AppBarListDevices(onScanClick = { viewModel.scanDevices() })
-        }
-    ) { innerPadding ->
-        Box(
-            modifier = modifier
-                .fillMaxSize()
-                .padding(innerPadding),
-        ) {
-            if (devices.isEmpty()) {
-                Text(
-                    text = "No devices found",
+    val activeDevice = uiState.activeChatDevice
+    if (activeDevice != null) {
+        ChatScreen(
+            device = activeDevice,
+            messages = uiState.messages,
+            onSendMessage = { text -> viewModel.sendMessage(text) },
+            onBackClick = { viewModel.closeChat() },
+        )
+    } else {
+        Scaffold(
+            contentWindowInsets = WindowInsets.safeDrawing,
+            topBar = {
+                AppBarListDevices(
+                    isScanning = uiState.isScanning,
+                    onScanClick = { viewModel.scanDevices() }
                 )
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    items(devices) { device ->
-                        DeviceComponent(
-                            deviceName = device.name,
-                            deviceAddress = device.address,
-                            isPair = device.isPair,
-                            isConnected = device.isConnected,
-                            onClickPairOrConnectDevice = {
-                                if (device.isPair) {
-                                    viewModel.connectDevice(deviceAddress = device.address)
-                                } else {
-                                    viewModel.pairDevice(deviceAddress = device.address)
-                                }
-                            },
-                            isLoading = uiState.isConnecting
-                        )
-
-
+            }
+        ) { innerPadding ->
+            Box(
+                modifier = modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
+            ) {
+                if (devices.isEmpty()) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(text = "No devices found")
                     }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        items(devices) { device ->
+                            DeviceComponent(
+                                deviceName = device.name,
+                                deviceAddress = device.address,
+                                isPair = device.isPair,
+                                isConnected = device.isConnected,
+                                onClickPairOrConnectDevice = {
+                                    if (device.isPair) {
+                                        viewModel.connectDevice(deviceAddress = device.address)
+                                    } else {
+                                        viewModel.pairDevice(deviceAddress = device.address)
+                                    }
+                                },
+                                onOpenChat = {
+                                    viewModel.openChat(device)
+                                },
+                                isLoading = uiState.isConnecting
+                            )
+                        }
 
-                    if (uiState.isScanning) {
-                        item {
-                            CircularProgressIndicator()
+                        if (uiState.isScanning) {
+                            item {
+                                CircularProgressIndicator()
+                            }
                         }
                     }
                 }
             }
-
-
         }
     }
 }
