@@ -96,7 +96,3 @@ The app dynamically requests required permissions based on the Android version:
 5. Grant Bluetooth permissions on both devices and start chatting offline!
 
 ---
-
-## License
-
-This project is licensed under the MIT License.
