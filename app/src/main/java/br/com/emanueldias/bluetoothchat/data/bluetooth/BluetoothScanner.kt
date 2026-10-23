@@ -5,6 +5,7 @@ import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
+import android.bluetooth.BluetoothServerSocket
 import android.bluetooth.BluetoothSocket
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -19,11 +20,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 
 sealed interface ConnectionState {
-    object Idle : ConnectionState
-    object Connecting : ConnectionState
+    data object Idle : ConnectionState
+    data object Connecting : ConnectionState
     data class Connected(val socket: BluetoothSocket) : ConnectionState
     data class Error(val message: String) : ConnectionState
 }
@@ -208,6 +211,53 @@ class BluetoothScanner(
     }
 
     @SuppressLint("MissingPermission")
+    fun listenForIncomingConnections(): Flow<ConnectionState> = callbackFlow {
+        if (!hasRequiredPermissions() || !isBluetoothEnable()) {
+            trySend(ConnectionState.Error("Bluetooth disabled or missing permissions"))
+            close()
+            return@callbackFlow
+        }
+
+        var serverSocket: BluetoothServerSocket? = null
+        try {
+            serverSocket = bluetoothAdapter?.listenUsingRfcommWithServiceRecord(
+                "BluetoothChat",
+                UUID.fromString(CHAT_SERVICE_UUID)
+            )
+        } catch (e: Exception) {
+            trySend(ConnectionState.Error(e.message ?: "Failed to create server socket"))
+            close()
+            return@callbackFlow
+        }
+
+        var shouldLoop = true
+        while (shouldLoop && isActive) {
+            val socket = try {
+                withContext(Dispatchers.IO) {
+                    serverSocket?.accept()
+                }
+            } catch (e: Exception) {
+                shouldLoop = false
+                null
+            }
+
+            if (socket != null) {
+                trySend(ConnectionState.Connected(socket))
+                try {
+                    serverSocket?.close()
+                } catch (_: Exception) {}
+                shouldLoop = false
+            }
+        }
+
+        awaitClose {
+            try {
+                serverSocket?.close()
+            } catch (_: Exception) {}
+        }
+    }.flowOn(Dispatchers.IO)
+
+    @SuppressLint("MissingPermission")
     fun connectToDevice(deviceAddress: String): Flow<ConnectionState> = callbackFlow {
         if (!hasRequiredPermissions() || !isBluetoothEnable()) {
             trySend(ConnectionState.Error("Bluetooth disabled or missing permissions"))
@@ -229,7 +279,7 @@ class BluetoothScanner(
         }
 
         val socket = try {
-            device.createRfcommSocketToServiceRecord(UUID.fromString("00001101-0000-1000-8000-00805F9B34FB"))
+            device.createRfcommSocketToServiceRecord(UUID.fromString(CHAT_SERVICE_UUID))
         } catch (e: Exception) {
             trySend(ConnectionState.Error(e.message ?: "Failed to create socket"))
             close()
@@ -252,9 +302,60 @@ class BluetoothScanner(
         awaitClose {
             // Keep socket open unless explicitly disconnected or flow cancelled
         }
+    }.flowOn(Dispatchers.IO)
+
+    fun readIncomingMessages(socket: BluetoothSocket): Flow<String> = callbackFlow {
+        val inputStream = try {
+            socket.inputStream
+        } catch (e: Exception) {
+            close(e)
+            return@callbackFlow
+        }
+
+        val buffer = ByteArray(1024)
+        while (isActive) {
+            val bytesRead = try {
+                withContext(Dispatchers.IO) {
+                    inputStream.read(buffer)
+                }
+            } catch (e: Exception) {
+                break
+            }
+
+            if (bytesRead > 0) {
+                val message = String(buffer, 0, bytesRead, Charsets.UTF_8)
+                trySend(message)
+            }
+        }
+
+        awaitClose {
+            // Flow cancelled or stream closed
+        }
+    }.flowOn(Dispatchers.IO)
+
+    suspend fun sendMessage(socket: BluetoothSocket, message: String): Boolean = withContext(Dispatchers.IO) {
+        return@withContext try {
+            val outputStream = socket.outputStream
+            outputStream.write(message.toByteArray(Charsets.UTF_8))
+            outputStream.flush()
+            true
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
+
+    fun closeSocket(socket: BluetoothSocket?) {
+        try {
+            socket?.close()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     companion object {
+        const val CHAT_SERVICE_UUID = "00001101-0000-1000-8000-00805F9B34FB"
+
         fun getRequiredPermissions(): Array<String> {
             return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 arrayOf(
